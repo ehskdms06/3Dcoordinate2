@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>3D 좌표계 & 전자기장 시각화</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;600;700&display=swap');
+body{font-family:'Noto Sans KR',sans-serif;background:#0a0e17;color:#e0e0e0;overflow:hidden;height:100vh;transition:background 0.3s, color 0.3s;}
+
+/* =========================================
+   Fullscreen Splash Screen (시작 화면)
+========================================= */
+.splash-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #0a0e17;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.6s ease, visibility 0.6s ease;
+}
+.splash-hidden {
+  opacity: 0;
+  visibility: hidden;
+}
+.splash-theme-toggle {
+  position: absolute;
+  top: 30px;
+  right: 30px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: #fff;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  font-size: 22px;
+  cursor: pointer;
+  transition: 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+.splash-theme-toggle:hover {
+  background: rgba(255,255,255,0.15);
+  transform: scale(1.1);
+}
+.splash-content {
+  text-align: center;
+  padding: 40px;
+  animation: fadeUp 1s ease-out;
+}
+@keyframes fadeUp {
+  0% { opacity: 0; transform: translateY(20px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.start-icon {
+  font-size: 80px;
+  margin-bottom: 24px;
+  animation: float 3s ease-in-out infinite;
+}
+@keyframes float {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-15px); }
+  100% { transform: translateY(0); }
+}
+.start-title {
+  font-size: 42px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, #60a5fa, #a78bfa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.start-desc {
+  font-size: 16px;
+  color: #94a3b8;
+  line-height: 1.6;
+  margin-bottom: 48px;
+  font-weight: 300;
+}
+.start-btn {
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  color: white;
+  padding: 16px 52px;
+  border-radius: 40px;
+  font-weight: 700;
+  font-size: 18px;
+  border: none;
+  cursor: pointer;
+  transition: 0.3s;
+  box-shadow: 0 4px 20px rgba(59,130,246,0.4);
+}
+.start-btn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 25px rgba(59,130,246,0.6);
+}
+
+/* =========================================
+   Main App UI
+========================================= */
+.app{display:flex;height:100vh}
+.sidebar{width:420px;min-width:420px;background:linear-gradient(180deg,#111827,#0f172a);border-right:1px solid #1e3a5f;display:flex;flex-direction:column;overflow-y:auto;z-index:10;transition:all 0.3s;}
+.viewer{flex:1;position:relative}
+#canvas3d{width:100%;height:100%;display:block}
+.logo{position:relative;padding:18px 22px 8px;font-size:20px;font-weight:700;background:linear-gradient(135deg,#60a5fa,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent; display:flex; justify-content:space-between; align-items:center;}
+.logo-texts small{display:block;font-size:11px;font-weight:400;-webkit-text-fill-color:#64748b;margin-top:2px;background:none}
+
+.theme-toggle-sidebar {background:rgba(255,255,255,0.05);border:none;font-size:14px;cursor:pointer;padding:6px;border-radius:50%;transition:0.2s;display:flex;align-items:center;justify-content:center;width:32px;height:32px;border:1px solid rgba(255,255,255,0.1);}
+.theme-toggle-sidebar:hover {background:rgba(255,255,255,0.15);transform:scale(1.1);}
+
+.section{padding:14px 22px;border-bottom:1px solid #1e293b;transition:border-color 0.3s}
+.stitle{font-size:12px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.tabs{display:flex;gap:5px;margin-bottom:12px}
+.tab{flex:1;padding:9px 4px;text-align:center;border-radius:8px;cursor:pointer;font-size:12px;font-weight:500;border:1px solid #1e293b;background:#0f172a;color:#64748b;transition:.2s;user-select:none}
+.tab:hover{border-color:#334155;color:#94a3b8}
+.tab.on{background:linear-gradient(135deg,#1e3a5f,#1e1b4b);border-color:#3b82f6;color:#60a5fa;box-shadow:0 0 15px rgba(59,130,246,.15)}
+.irow{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.irow label{width:70px;font-size:13px;color:#94a3b8;font-weight:500;flex-shrink:0}
+.irow input[type=number],.irow select{flex:1;background:#0f172a;border:1px solid #1e293b;border-radius:8px;padding:9px 12px;color:#e2e8f0;font-size:14px;outline:none;font-family:inherit;transition:0.3s;}
+.irow input:focus,.irow select:focus{border-color:#3b82f6}
+.irow .hint{font-size:11px;color:#475569;width:30px;text-align:right;flex-shrink:0}
+.btn{width:100%;padding:11px;border-radius:9px;border:none;font-size:13px;font-weight:600;cursor:pointer;transition:.2s;font-family:inherit;margin-top:6px}
+.bp{background:linear-gradient(135deg,#3b82f6,#6366f1);color:#fff}
+.bc{background:linear-gradient(135deg,#8b5cf6,#ec4899);color:#fff}
+.bg{background:linear-gradient(135deg,#22c55e,#14b8a6);color:#fff}
+.bo{background:linear-gradient(135deg,#f59e0b,#ef4444);color:#fff}
+.btn:hover{transform:translateY(-1px);filter:brightness(1.1);box-shadow:0 4px 12px rgba(0,0,0,0.2)}
+.rcard{background:#0d1321;border:1px solid #1e293b;border-radius:10px;padding:14px;margin-top:8px;transition:0.3s;}
+.rcard h4{font-size:12px;color:#94a3b8;margin-bottom:8px}
+.rcard .coord{font-family:'Courier New',monospace;font-size:13px;color:#e2e8f0;margin-bottom:8px}
+.vr{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px}
+.vr .vc{width:12px;height:12px;border-radius:3px;flex-shrink:0}
+.vr .vn{font-weight:600;width:50px}
+.vr .vv{color:#94a3b8;font-family:'Courier New',monospace;font-size:12px}
+.bsm{padding:6px 12px;font-size:11px;width:auto;border-radius:6px;background:#1e293b;color:#94a3b8;border:1px solid #334155;cursor:pointer;font-family:inherit;margin:0}
+.bsm:hover{background:#334155;color:#e2e8f0}
+.trow{display:flex;align-items:center;justify-content:space-between;padding:3px 0}
+.trow label{font-size:12px;color:#94a3b8}
+.sw{position:relative;width:38px;height:20px;display:inline-block;flex-shrink:0}
+.sw input{display:none}
+.sl{position:absolute;inset:0;background:#1e293b;border-radius:10px;cursor:pointer;transition:.2s}
+.sl:before{content:'';position:absolute;width:14px;height:14px;left:3px;top:3px;background:#475569;border-radius:50%;transition:.2s}
+.sw input:checked+.sl{background:#3b82f6}
+.sw input:checked+.sl:before{transform:translateX(18px);background:#fff}
+
+.info{position:absolute;top:14px;left:14px;background:rgba(15,23,42,.88);backdrop-filter:blur(8px);border:1px solid #1e293b;border-radius:10px;padding:12px 16px;font-size:12px;color:#94a3b8;pointer-events:none;max-width:360px;line-height:1.6;transition:0.3s;}
+.info b{color:#e2e8f0;font-size:13px}
+.legend{position:absolute;bottom:14px;left:14px;display:flex;gap:12px;font-size:11px;font-weight:500;pointer-events:none;flex-wrap:wrap;color:#94a3b8;}
+.legend span{display:flex;align-items:center;gap:4px}
+.legend i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.empty{text-align:center;padding:20px;color:#334155;font-size:12px}
+
+.sidebar::-webkit-scrollbar{width:4px}
+.sidebar::-webkit-scrollbar-thumb{background:#1e293b;border-radius:9px}
+.zoom-ctrl{position:absolute;top:14px;right:14px;display:flex;flex-direction:column;gap:6px;z-index:20}
+.zoom-btn{width:40px;height:40px;border-radius:10px;border:1px solid #1e293b;background:rgba(15,23,42,.85);backdrop-filter:blur(8px);color:#94a3b8;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.2s;font-family:inherit}
+.zoom-btn:hover{background:#1e293b;color:#e2e8f0;border-color:#334155}
+.zoom-range{writing-mode:vertical-lr;direction:rtl;width:40px;height:140px;-webkit-appearance:none;appearance:none;background:transparent;margin:0}
+.zoom-range::-webkit-slider-runnable-track{width:4px;background:linear-gradient(to top,#1e293b,#3b82f6);border-radius:2px}
+.zoom-range::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#60a5fa;border:2px solid #0f172a;cursor:pointer;margin-left:-6px}
+
+.feat-card{padding:16px;border:1px solid #1e293b;border-radius:12px;cursor:pointer;transition:.25s;background:linear-gradient(135deg,#0f172a,#111827);margin-bottom:10px}
+.feat-card:hover{border-color:#3b82f6;transform:translateX(4px);box-shadow:0 0 20px rgba(59,130,246,.1)}
+.feat-card .fc-title{font-size:15px;font-weight:600;color:#e2e8f0;margin-bottom:4px;display:flex;align-items:center;gap:8px;transition:0.3s;}
+.feat-card .fc-desc{font-size:12px;color:#64748b;line-height:1.5}
+.feat-card .fc-icon{font-size:24px}
+.back-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;border:1px solid #1e293b;background:#0f172a;color:#64748b;cursor:pointer;font-size:12px;font-family:inherit;transition:.2s;margin-bottom:12px}
+.back-btn:hover{border-color:#334155;color:#e2e8f0}
+.panel{display:none}.panel.active{display:block}
+.pt-box{background:#0d1321;border:1px solid #1e293b;border-radius:10px;padding:12px;margin-bottom:10px;transition:0.3s;}
+.pt-box .pt-title{font-size:13px;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.chk-grid{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chk-item{display:flex;align-items:center;gap:5px;padding:6px 10px;border:1px solid #1e293b;border-radius:7px;cursor:pointer;transition:.3s;font-size:12px;user-select:none;background:#0f172a; position:relative}
+.chk-item:hover{border-color:#334155}
+.chk-item.checked{border-color:var(--c);color:#fff;background:rgba(15,23,42,0.6);box-shadow:0 0 10px var(--c), inset 0 0 5px var(--c);text-shadow:0 0 4px var(--c)}
+.chk-item .ci-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+.hi{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:#0f172a;border:1px solid #1e293b;border-radius:7px;margin-bottom:5px;cursor:pointer;font-size:11px;transition:.2s}
+.hi:hover{border-color:#334155}
+.hi .ft{color:#60a5fa;font-weight:500}
+.hi .cd{color:#94a3b8;font-family:'Courier New',monospace;font-size:10px}
+.hi .x{color:#475569;padding:2px 5px;border-radius:3px;cursor:pointer}
+.hi .x:hover{color:#ef4444;background:#1e293b}
+.src-item{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#0f172a;border:1px solid #1e293b;border-radius:8px;margin-bottom:6px;font-size:12px;transition:0.3s;}
+.src-item .si-info{flex:1}
+.src-item .si-type{color:#f59e0b;font-weight:600;font-size:11px;text-transform:uppercase}
+.src-item .si-detail{color:#94a3b8;font-family:'Courier New',monospace;font-size:11px;margin-top:2px}
+.src-item .si-del{color:#475569;cursor:pointer;padding:4px 8px;border-radius:4px;font-size:14px}
+.src-item .si-del:hover{color:#ef4444;background:#1e293b}
+
+/* =========================================
+   ☀️ Light Theme Overrides
+========================================= */
+body.light-mode {background:#f8fafc; color:#0f172a;}
+body.light-mode .splash-screen {background: #f8fafc;}
+body.light-mode .splash-theme-toggle {background:rgba(0,0,0,0.05); border-color:rgba(0,0,0,0.1); color:#0f172a;}
+body.light-mode .splash-theme-toggle:hover {background:rgba(0,0,0,0.1);}
+body.light-mode .start-desc {color: #475569;}
+
+body.light-mode .sidebar {background:linear-gradient(180deg,#ffffff,#f1f5f9); border-right-color:#cbd5e1;}
+body.light-mode .theme-toggle-sidebar {background:rgba(0,0,0,0.05); border-color:rgba(0,0,0,0.1); color:#0f172a;}
+body.light-mode .theme-toggle-sidebar:hover {background:rgba(0,0,0,0.1);}
+body.light-mode .section {border-bottom-color:#e2e8f0;}
+body.light-mode .stitle {color:#64748b;}
+body.light-mode .tab {background:#f8fafc; border-color:#cbd5e1; color:#64748b;}
+body.light-mode .tab:hover {border-color:#94a3b8; color:#334155;}
+body.light-mode .tab.on {background:linear-gradient(135deg,#eff6ff,#dbeafe); border-color:#3b82f6; color:#1d4ed8; box-shadow:0 0 10px rgba(59,130,246,0.1);}
+body.light-mode .irow label, body.light-mode .trow label {color:#475569;}
+body.light-mode .irow input[type=number], body.light-mode .irow select {background:#ffffff; border-color:#cbd5e1; color:#0f172a;}
+body.light-mode .rcard, body.light-mode .pt-box {background:#ffffff; border-color:#e2e8f0; box-shadow:0 2px 8px rgba(0,0,0,0.02);}
+body.light-mode .rcard h4, body.light-mode .pt-box .pt-title {color:#475569;}
+body.light-mode .rcard .coord, body.light-mode .vr .vv {color:#334155;}
+body.light-mode .feat-card {background:linear-gradient(135deg,#ffffff,#f8fafc); border-color:#e2e8f0; box-shadow:0 2px 10px rgba(0,0,0,0.02);}
+body.light-mode .feat-card:hover {border-color:#3b82f6; box-shadow:0 4px 15px rgba(59,130,246,0.1);}
+body.light-mode .feat-card .fc-title {color:#0f172a;}
+body.light-mode .back-btn {background:#ffffff; border-color:#cbd5e1; color:#475569;}
+body.light-mode .back-btn:hover {border-color:#94a3b8; color:#0f172a;}
+body.light-mode .chk-item {background:#ffffff; border-color:#cbd5e1; color:#475569;}
+body.light-mode .chk-item.checked {background:rgba(59,130,246,0.08); color:#0f172a; box-shadow:inset 0 0 0 1px var(--c); text-shadow:none;}
+body.light-mode .hi, body.light-mode .src-item {background:#ffffff; border-color:#e2e8f0;}
+body.light-mode .hi .cd, body.light-mode .src-item .si-detail {color:#64748b;}
+body.light-mode .info, body.light-mode .zoom-btn {background:rgba(255,255,255,0.9); border-color:#e2e8f0; color:#475569;}
+body.light-mode .info b {color:#0f172a;}
+body.light-mode .zoom-btn:hover {background:#f1f5f9; color:#0f172a;}
+body.light-mode .zoom-range::-webkit-slider-runnable-track {background:linear-gradient(to top,#cbd5e1,#3b82f6);}
+body.light-mode .sl {background:#cbd5e1;}
+body.light-mode .empty {color:#94a3b8;}
+</style>
+</head>
+<body>
+
+<div id="splashScreen" class="splash-screen">
+  <button id="themeToggleSplash" class="splash-theme-toggle" title="테마 변경">☀️</button>
+  <div class="splash-content">
+    <div class="start-icon">🌌</div>
+    <h1 class="start-title">3D CoordViz</h1>
+    <p class="start-desc">
+      직교, 원통, 구면 좌표계의 상호 변환부터<br>
+      두 점 사이의 벡터 관계, 그리고<br>
+      전하 분포에 따른 3D 전자기장 시각화까지.<br><br>
+      복잡한 전자기학 개념을 직관적인 3D 환경에서 탐구해 보세요.
+    </p>
+    <button class="start-btn" id="btnStartFullscreen">시작하기</button>
+  </div>
+</div>
+
+<div class="app">
+<div class="sidebar">
+  <div class="logo">
+    <div class="logo-texts">
+      3D CoordViz<small>좌표계 & 전자기장 시각화</small>
+    </div>
+    <button id="themeToggleSidebar" class="theme-toggle-sidebar" title="테마 변경">☀️</button>
+  </div>
+
+  <div id="panelSelect" class="panel active">
+    <div class="section">
+      <div class="stitle"><span class="dot" style="background:#3b82f6"></span>기능 선택</div>
+      <div class="feat-card" id="feat1">
+        <div class="fc-title"><span class="fc-icon">🔄</span>좌표계 변환</div>
+        <div class="fc-desc">직교·원통·구면 좌표계 간 변환 및 단위벡터 시각화</div>
+      </div>
+      <div class="feat-card" id="feat2">
+        <div class="fc-title"><span class="fc-icon">📐</span>두 점 사이의 관계</div>
+        <div class="fc-desc">두 점 사이 벡터를 직교·원통·구면 성분으로 분해</div>
+      </div>
+      <div class="feat-card" id="feat3">
+        <div class="fc-title"><span class="fc-icon">⚡</span>전기장 / 전속밀도 시각화</div>
+        <div class="fc-desc">전하를 배치하고 특정 점에서의 E, D 필드를 3D로 확인</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="panelF1" class="panel">
+    <div class="section"><button class="back-btn" id="backF1">← 기능 선택으로</button><div class="stitle"><span class="dot" style="background:#3b82f6"></span>좌표계 변환</div></div>
+    <div class="section">
+      <div class="stitle"><span class="dot" style="background:#22c55e"></span>입력 좌표계</div>
+      <div class="tabs" id="srcTabs"><div class="tab on" data-sys="cartesian">직교</div><div class="tab" data-sys="cylindrical">원통</div><div class="tab" data-sys="spherical">구면</div></div>
+      <div id="f1Inputs"></div>
+      <button class="btn bp" id="f1Plot">📍 3D 좌표 & 단위벡터</button>
+    </div>
+    <div class="section">
+      <div class="stitle"><span class="dot" style="background:#a78bfa"></span>변환 좌표계</div>
+      <div class="tabs" id="dstTabs"></div>
+      <button class="btn bc" id="f1Convert">🔄 변환 & 비교</button>
+    </div>
+    <div class="section" id="f1ResBox" style="display:none"><div class="stitle"><span class="dot" style="background:#f59e0b"></span>결과</div><div id="f1SrcCard"></div><div id="f1DstCard"></div></div>
+    <div class="section">
+      <div class="stitle"><span class="dot" style="background:#64748b"></span>옵션</div>
+      <div class="trow"><label>그리드</label><label class="sw"><input type="checkbox" class="tGrid" checked><span class="sl"></span></label></div>
+      <div class="trow"><label>원점 축</label><label class="sw"><input type="checkbox" class="tAxes" checked><span class="sl"></span></label></div>
+    </div>
+    <div class="section"><div class="stitle"><span class="dot" style="background:#ec4899"></span>기록 <button class="bsm" style="margin-left:auto" id="btnClearHist">삭제</button></div><div id="histList"><div class="empty">기록 없음</div></div></div>
+  </div>
+
+  <div id="panelF2" class="panel">
+    <div class="section"><button class="back-btn" id="backF2">← 기능 선택으로</button><div class="stitle"><span class="dot" style="background:#3b82f6"></span>두 점 사이의 관계</div></div>
+    <div class="section">
+      <div class="pt-box"><div class="pt-title"><span style="color:#f59e0b">●</span> 점 A</div><div class="tabs" id="ptASysTabs"><div class="tab on" data-sys="cartesian">직교</div><div class="tab" data-sys="cylindrical">원통</div><div class="tab" data-sys="spherical">구면</div></div><div id="ptAInputs"></div></div>
+      <div class="pt-box"><div class="pt-title"><span style="color:#38bdf8">●</span> 점 B</div><div class="tabs" id="ptBSysTabs"><div class="tab on" data-sys="cartesian">직교</div><div class="tab" data-sys="cylindrical">원통</div><div class="tab" data-sys="spherical">구면</div></div><div id="ptBInputs"></div></div>
+      <button class="btn bg" id="f2Calc">📐 벡터 계산 & 표시</button>
+    </div>
+    <div class="section">
+      <div class="stitle"><span class="dot" style="background:#a78bfa"></span>표시 성분</div>
+      <div style="font-size:12px;color:#64748b;font-weight:600;margin:6px 0 4px">직교</div><div class="chk-grid" id="chkCart"></div>
+      <div style="font-size:12px;color:#64748b;font-weight:600;margin:6px 0 4px">원통</div><div class="chk-grid" id="chkCyl"></div>
+      <div style="font-size:12px;color:#64748b;font-weight:600;margin:6px 0 4px">구면</div><div class="chk-grid" id="chkSph"></div>
+    </div>
+    <div class="section">
+      <div class="stitle"><span class="dot" style="background:#64748b"></span>옵션</div>
+      <div class="trow"><label>그리드</label><label class="sw"><input type="checkbox" class="tGrid" checked><span class="sl"></span></label></div>
+      <div class="trow"><label>원점 축</label><label class="sw"><input type="checkbox" class="tAxes" checked><span class="sl"></span></label></div>
+    </div>
+    <div class="section" id="f2ResBox" style="display:none"><div class="stitle"><span class="dot" style="background:#f59e0b"></span>결과</div><div id="f2Result"></div></div>
+  </div>
+
+  <div id="panelF3" class="panel">
+    <div class="section"><button class="back-btn" id="backF3">← 기능 선택으로</button><div class="stitle"><span class="dot" style="background:#f59e0b"></span>전기장 / 전속밀도 시각화</div></div>
+    <div class="section">
+      <div class="stitle"><span class="dot" style="background:#ef4444"></span>전하 소스 추가</div>
+      <div class="irow"><label>종류</label><select id="emType"><option value="point">점전하 (Point Charge)</option><option value="line">직선전하 (Line Charge)</option><option value="surface">무한 면전하 (Surface Charge)</option></select></div>
+      <div id="emParams"></div>
+      <button class="btn bo" id="emAdd">➕ 소스 추가</button>
+    </div>
+    <div class="section">
+      <div class="stitle"><span class="dot" style="background:#22c55e"></span>배치된 소스 <button class="bsm" style="margin-left:auto" id="emClearAll">전체 삭제</button></div>
+      <div id="emSrcList"><div class="empty">소스를 추가하세요</div></div>
+    </div>
+    <div class="section">
+      <div class="stitle"><span class="dot" style="background:#3b82f6"></span>특정 점 설정</div>
+      <div class="tabs" id="emPtSysTabs" style="margin-bottom:8px">
+        <div class="tab on" data-sys="cartesian">직교</div>
+        <div class="tab" data-sys="cylindrical">원통</div>
+        <div class="tab" data-sys="spherical">구면</div>
+      </div>
+      <div id="emPtInputs"></div>
+      
+      <div style="font-size:12px;color:#64748b;font-weight:600;margin:12px 0 6px">3D 뷰에 표시할 벡터 성분</div>
+      <div class="chk-grid" id="emF3Comps">
+        <div class="chk-item checked" data-comp="E_total" style="--c:#ffff00"><span class="ci-dot" style="background:#ffff00"></span>전체 E</div>
+        <div class="chk-item" data-comp="Ex" style="--c:#22c55e"><span class="ci-dot" style="background:#22c55e"></span>Ex</div>
+        <div class="chk-item" data-comp="Ey" style="--c:#ef4444"><span class="ci-dot" style="background:#ef4444"></span>Ey</div>
+        <div class="chk-item" data-comp="Ez" style="--c:#3b82f6"><span class="ci-dot" style="background:#3b82f6"></span>Ez</div>
+        <div class="chk-item" data-comp="Erho" style="--c:#f97316"><span class="ci-dot" style="background:#f97316"></span>Eρ</div>
+        <div class="chk-item" data-comp="Ephi_cyl" style="--c:#eab308"><span class="ci-dot" style="background:#eab308"></span>Eφ(원통)</div>
+        <div class="chk-item" data-comp="Er" style="--c:#ec4899"><span class="ci-dot" style="background:#ec4899"></span>Er</div>
+        <div class="chk-item" data-comp="Eth" style="--c:#a855f7"><span class="ci-dot" style="background:#a855f7"></span>Eθ</div>
+        <div class="chk-item" data-comp="Ephi_sph" style="--c:#14b8a6"><span class="ci-dot" style="background:#14b8a6"></span>Eφ(구면)</div>
+      </div>
+      <button class="btn bg" id="emCalcPt">🔍 E, D 계산 및 3D 표시</button>
+    </div>
+    <div class="section">
+      <div class="stitle"><span class="dot" style="background:#64748b"></span>옵션</div>
+      <div class="trow"><label>그리드</label><label class="sw"><input type="checkbox" class="tGrid" checked><span class="sl"></span></label></div>
+      <div class="trow"><label>원점 축</label><label class="sw"><input type="checkbox" class="tAxes" checked><span class="sl"></span></label></div>
+    </div>
+    <div class="section" id="emResBox" style="display:none">
+      <div class="stitle"><span class="dot" style="background:#f59e0b"></span>계산 결과</div>
+      <div id="emResult"></div>
+    </div>
+  </div>
+</div>
+
+<div class="viewer">
+  <canvas id="canvas3d"></canvas>
+  <div class="info" id="infoBox"><b>기능을 선택해주세요</b><br>왼쪽 패널에서 원하는 기능을 클릭하세요</div>
+  <div class="zoom-ctrl">
+    <button class="zoom-btn" id="zoomIn">+</button>
+    <input type="range" class="zoom-range" id="zoomSlider" min="2" max="40" step="0.5" value="13">
+    <button class="zoom-btn" id="zoomOut">−</button>
+    <button class="zoom-btn" id="zoomReset" style="font-size:13px;margin-top:4px">⟳</button>
+  </div>
+  <div class="legend" id="legendBar">
+    <span><i style="background:#22c55e"></i>X</span>
+    <span><i style="background:#ef4444"></i>Y</span>
+    <span><i style="background:#3b82f6"></i>Z</span>
+  </div>
+</div>
+</div>
+
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+
+const DEG=Math.PI/180,RAD=180/Math.PI,PI=Math.PI,EPS0=8.854187817e-12;
+const SYS={cartesian:{name:'직교',lbl:['x','y','z'],unit:['','','']},cylindrical:{name:'원통',lbl:['ρ','φ','z'],unit:['','°','']},spherical:{name:'구면',lbl:['r','θ','φ'],unit:['','°','°']}};
+const SRCC=['#ef4444','#22c55e','#3b82f6'],DSTC=['#ff6b9d','#fbbf24','#34d399'];
+let srcSys='cartesian',dstSys='cylindrical',ptASys='cartesian',ptBSys='cartesian';
+let scene,camera,renderer,controls,gridObj,axesObj,dynGroup;
+let labelMeshes=[];
+let currentFeature=0;
+let checkedComps={cx:true,cy:true,cz:true,rho:false,cphi:false,cylz:false,sr:false,sth:false,sphi:false};
+let emSources=[];
+let f1Hist = [];
+let emPtSys = 'cartesian'; 
+let emPtGroup=null; 
+let emCheckedComps = {E_total:true, Ex:false, Ey:false, Ez:false, Erho:false, Ephi_cyl:false, Er:false, Eth:false, Ephi_sph:false};
+
+// Theme Helper
+function getThemeColor() { return document.body.classList.contains('light-mode') ? '#0f172a' : '#ffffff'; }
+
+// Math Utilities
+function m2t(mx,my,mz){return new THREE.Vector3(my,mz,mx)}
+function toCart(sys,v){
+  if(sys==='cartesian')return v.slice();
+  if(sys==='cylindrical'){const[r,pD,z]=v,p=pD*DEG;return[r*Math.cos(p),r*Math.sin(p),z]}
+  const[r,tD,pD]=v,t=tD*DEG,p=pD*DEG;return[r*Math.sin(t)*Math.cos(p),r*Math.sin(t)*Math.sin(p),r*Math.cos(t)]
+}
+function fromCart(sys,c){
+  const[x,y,z]=c;if(sys==='cartesian')return[x,y,z];
+  if(sys==='cylindrical'){const r=Math.sqrt(x*x+y*y);let p=Math.atan2(y,x)*RAD;if(p<0)p+=360;return[r,p,z]}
+  const r=Math.sqrt(x*x+y*y+z*z);if(r===0)return[0,0,0];
+  const t=Math.acos(Math.min(1,Math.max(-1,z/r)))*RAD;let p=Math.atan2(y,x)*RAD;if(p<0)p+=360;return[r,t,p]
+}
+function unitVecs(sys,v){
+  if(sys==='cartesian')return[{d:[1,0,0],l:'x̂'},{d:[0,1,0],l:'ŷ'},{d:[0,0,1],l:'ẑ'}];
+  if(sys==='cylindrical'){const p=v[1]*DEG,c=Math.cos(p),s=Math.sin(p);return[{d:[c,s,0],l:'ρ̂'},{d:[-s,c,0],l:'φ̂'},{d:[0,0,1],l:'ẑ'}]}
+  const t=v[1]*DEG,p=v[2]*DEG,st=Math.sin(t),ct=Math.cos(t),sp=Math.sin(p),cp=Math.cos(p);
+  return[{d:[st*cp,st*sp,ct],l:'r̂'},{d:[ct*cp,ct*sp,-st],l:'θ̂'},{d:[-sp,cp,0],l:'φ̂'}]
+}
+function decomposeVec(vec,cartPt,sys){
+  const cv=fromCart(sys,cartPt),uvs=unitVecs(sys,cv);
+  return uvs.map(uv=>({mag:vec[0]*uv.d[0]+vec[1]*uv.d[1]+vec[2]*uv.d[2],dir:uv.d,label:uv.l}))
+}
+
+// 3D Initialization
+function init(){
+  const cv=document.getElementById('canvas3d'),W=cv.parentElement.clientWidth,H=cv.parentElement.clientHeight;
+  renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true});renderer.setSize(W,H);renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.setClearColor(0x0a0e17);
+  scene=new THREE.Scene();camera=new THREE.PerspectiveCamera(50,W/H,0.1,500);camera.position.set(9,7,7);
+  controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.dampingFactor=0.08;controls.minDistance=2;controls.maxDistance=100;
+  scene.add(new THREE.AmbientLight(0xffffff,0.7));const dl=new THREE.DirectionalLight(0xffffff,0.9);dl.position.set(5,10,7);scene.add(dl);
+  
+  createGrid();
+  createAxes();
+  
+  dynGroup=new THREE.Group();scene.add(dynGroup);
+  
+  (function lp(){requestAnimationFrame(lp);controls.update();renderer.render(scene,camera)})();
+  window.addEventListener('resize',()=>{const w=cv.parentElement.clientWidth,h=cv.parentElement.clientHeight;camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h)});
+  controls.addEventListener('change',()=>{document.getElementById('zoomSlider').value=camera.position.distanceTo(controls.target)});
+}
+
+function createGrid() {
+  if (gridObj) scene.remove(gridObj);
+  const isLight = document.body.classList.contains('light-mode');
+  gridObj = new THREE.GridHelper(1000, 1000, isLight ? 0x64748b : 0x94a3b8, isLight ? 0x94a3b8 : 0x334155);
+  // 수정: class 기반 검색으로 변경
+  gridObj.visible = document.querySelector('.tGrid') ? document.querySelector('.tGrid').checked : true;
+  scene.add(gridObj);
+}
+
+function createAxes() {
+  if (axesObj) scene.remove(axesObj);
+  const isLight = document.body.classList.contains('light-mode');
+  axesObj = new THREE.Group();
+  
+  const cX = isLight ? 0x008800 : 0x44ff44;
+  const cY = isLight ? 0xcc0000 : 0xff4444;
+  const cZ = isLight ? 0x0044cc : 0x4488ff;
+  
+  addAx(axesObj,[0,0,1],cX,'X',8);
+  addAx(axesObj,[1,0,0],cY,'Y',8);
+  addAx(axesObj,[0,1,0],cZ,'Z',8);
+  
+  axesObj.add(new THREE.Mesh(
+    new THREE.SphereGeometry(0.07,12,12),
+    new THREE.MeshBasicMaterial({color: isLight ? 0x333333 : 0xffffff})
+  ));
+  // 수정: class 기반 검색으로 변경
+  axesObj.visible = document.querySelector('.tAxes') ? document.querySelector('.tAxes').checked : true;
+  scene.add(axesObj);
+}
+
+function addAx(g,d,c,l,n){const dir=new THREE.Vector3(...d);g.add(new THREE.ArrowHelper(dir,new THREE.Vector3(),n,c,0.2,0.1));const ng=new THREE.ArrowHelper(dir.clone().negate(),new THREE.Vector3(),n,c,0,0);ng.line.material.transparent=true;ng.line.material.opacity=0.25;g.add(ng);const sp=mkLbl(l,'#'+c.toString(16).padStart(6,'0'));sp.position.set(d[0]*(n+.6),d[1]*(n+.6),d[2]*(n+.6));g.add(sp)}
+function mkLbl(t,c,s){const cv=document.createElement('canvas');cv.width=256;cv.height=128;const ctx=cv.getContext('2d');ctx.font='bold 60px Arial';ctx.fillStyle=c||'#fff';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(t,128,64);const tex=new THREE.CanvasTexture(cv);const mat=new THREE.SpriteMaterial({map:tex,transparent:true,depthTest:false});const sp=new THREE.Sprite(mat);sp.scale.set(s||1,.5,1);return sp}
+
+function clearDyn(){
+  while(dynGroup.children.length>0)dynGroup.remove(dynGroup.children[0]);
+  labelMeshes=[];
+  emPtGroup=null;
+}
+function drawArrow(o,d,len,color,label){const g=new THREE.Group(),O=m2t(...o),D=m2t(...d).normalize();g.add(new THREE.ArrowHelper(D,O,len,new THREE.Color(color),len*.14,len*.065));if(label){const lb=mkLbl(label,color,1.1);lb.position.copy(O.clone().add(D.clone().multiplyScalar(len+.5)));g.add(lb);labelMeshes.push(lb)}return g}
+function drawPt(c,color){const m=new THREE.Mesh(new THREE.SphereGeometry(.15,16,16),new THREE.MeshStandardMaterial({color:new THREE.Color(color),emissive:new THREE.Color(color),emissiveIntensity:.5}));m.position.copy(m2t(...c));return m}
+function drawLine(a,b,color,dashed){const pts=[m2t(...a),m2t(...b)],geo=new THREE.BufferGeometry().setFromPoints(pts);if(dashed){const mat=new THREE.LineDashedMaterial({color:new THREE.Color(color),dashSize:.15,gapSize:.1,transparent:true,opacity:.5});const l=new THREE.Line(geo,mat);l.computeLineDistances();return l}return new THREE.Line(geo,new THREE.LineBasicMaterial({color:new THREE.Color(color)}))}
+function drawVG(cp,uvs,cols,len,skip){skip=skip||[];const g=new THREE.Group();uvs.forEach((u,i)=>{if(!skip.includes(i))g.add(drawArrow(cp,u.d,len,cols[i],u.l))});return g}
+
+// =========================================
+// Theme Toggle & Splash Logic
+// =========================================
+function toggleTheme() {
+  const isLight = document.body.classList.toggle('light-mode');
+  const icon = isLight ? '🌙' : '☀️';
+  document.getElementById('themeToggleSplash').innerText = icon;
+  document.getElementById('themeToggleSidebar').innerText = icon;
+  
+  if (renderer) renderer.setClearColor(isLight ? 0xf8fafc : 0x0a0e17);
+  createGrid();
+  createAxes();
+  
+  if (currentFeature === 1 && document.getElementById('f1ResBox').style.display !== 'none') {
+      if (document.getElementById('f1DstCard').innerHTML !== '') document.getElementById('f1Convert').click();
+      else document.getElementById('f1Plot').click();
+  }
+  if (currentFeature === 2 && document.getElementById('f2ResBox').style.display !== 'none') document.getElementById('f2Calc').click();
+  if (currentFeature === 3 && document.getElementById('emResBox').style.display !== 'none') document.getElementById('emCalcPt').click();
+}
+document.getElementById('themeToggleSplash').addEventListener('click', toggleTheme);
+document.getElementById('themeToggleSidebar').addEventListener('click', toggleTheme);
+document.getElementById('btnStartFullscreen').addEventListener('click', () => {
+  document.getElementById('splashScreen').classList.add('splash-hidden');
+});
+
+// =========================================
+// Feature 1: Transform 
+// =========================================
+function f1BI(){const s=SYS[srcSys];document.getElementById('f1Inputs').innerHTML=s.lbl.map((l,i)=>`<div class="irow"><label>${l}</label><input id="f1v${i}" type="number" step="any" value="${[3,4,5][i]}"><span class="hint">${s.unit[i]}</span></div>`).join('')}
+function f1BDT(){const o=Object.keys(SYS).filter(k=>k!==srcSys);dstSys=o[0];document.getElementById('dstTabs').innerHTML=o.map((k,i)=>`<div class="tab${i===0?' on':''}" data-sys="${k}">${SYS[k].name}</div>`).join('');document.querySelectorAll('#dstTabs .tab').forEach(el=>{el.addEventListener('click',()=>{document.querySelectorAll('#dstTabs .tab').forEach(t=>t.classList.remove('on'));el.classList.add('on');dstSys=el.dataset.sys})})}
+function f1V(){return[0,1,2].map(i=>parseFloat(document.getElementById('f1v'+i)?.value)||0)}
+document.querySelectorAll('#srcTabs .tab').forEach(el=>{el.addEventListener('click',()=>{document.querySelectorAll('#srcTabs .tab').forEach(t=>t.classList.remove('on'));el.classList.add('on');srcSys=el.dataset.sys;f1BI();f1BDT()})});
+
+document.getElementById('f1Plot').addEventListener('click', () => {
+  clearDyn();
+  const v = f1V();
+  const cartPt = toCart(srcSys, v);
+  dynGroup.add(drawPt(cartPt, getThemeColor()));
+  const lineColor = document.body.classList.contains('light-mode') ? '#64748b' : '#aaaaaa';
+  dynGroup.add(drawLine([0,0,0], cartPt, lineColor, true));
+  const uvs = unitVecs(srcSys, v);
+  dynGroup.add(drawVG(cartPt, uvs, SRCC, 2));
+  document.getElementById('f1ResBox').style.display = 'block';
+  document.getElementById('f1SrcCard').innerHTML = `<div class="rcard"><h4>입력 (${SYS[srcSys].name})</h4><div class="coord">${v.map(x=>x.toFixed(3)).join(', ')}</div></div>`;
+  document.getElementById('f1DstCard').innerHTML = '';
+});
+
+document.getElementById('f1Convert').addEventListener('click', () => {
+  document.getElementById('f1Plot').click();
+  const v = f1V();
+  const cartPt = toCart(srcSys, v);
+  const dstV = fromCart(dstSys, cartPt);
+  const uvs = unitVecs(dstSys, dstV);
+  dynGroup.add(drawVG(cartPt, uvs, DSTC, 2.5)); 
+  document.getElementById('f1DstCard').innerHTML = `<div class="rcard"><h4>변환 (${SYS[dstSys].name})</h4><div class="coord">${dstV.map(x=>x.toFixed(3)).join(', ')}</div></div>`;
+  f1Hist.unshift({s: srcSys, sv: v, d: dstSys, dv: dstV});
+  if(f1Hist.length > 10) f1Hist.pop();
+  renderHist();
+});
+
+function renderHist(){
+  const el = document.getElementById('histList');
+  if(!f1Hist.length) { el.innerHTML='<div class="empty">기록 없음</div>'; return; }
+  el.innerHTML = f1Hist.map((h,i)=>`<div class="hi"><span class="ft">${SYS[h.s].name}→${SYS[h.d].name}</span><span class="cd">${h.sv.map(x=>x.toFixed(1)).join(',')} → ${h.dv.map(x=>x.toFixed(1)).join(',')}</span><span class="x" data-idx="${i}">✕</span></div>`).join('');
+  el.querySelectorAll('.x').forEach(btn => btn.addEventListener('click', (e)=>{
+    f1Hist.splice(parseInt(e.target.dataset.idx), 1);
+    renderHist();
+  }));
+}
+document.getElementById('btnClearHist').addEventListener('click', ()=>{ f1Hist=[]; renderHist(); });
+
+// =========================================
+// Feature 2: Two Points 
+// =========================================
+function f2BI(pfx,sys,defs){const s=SYS[sys];document.getElementById(pfx+'Inputs').innerHTML=s.lbl.map((l,i)=>`<div class="irow"><label>${l}</label><input id="${pfx}v${i}" type="number" step="any" value="${defs[i]}"><span class="hint">${s.unit[i]}</span></div>`).join('')}
+const CDEFS=[{id:'cx',label:'x',color:'#22c55e',sys:'cartesian',idx:0},{id:'cy',label:'y',color:'#ef4444',sys:'cartesian',idx:1},{id:'cz',label:'z',color:'#3b82f6',sys:'cartesian',idx:2},{id:'rho',label:'ρ',color:'#f97316',sys:'cylindrical',idx:0},{id:'cphi',label:'φ(원통)',color:'#eab308',sys:'cylindrical',idx:1},{id:'cylz',label:'z(원통)',color:'#06b6d4',sys:'cylindrical',idx:2},{id:'sr',label:'r',color:'#ec4899',sys:'spherical',idx:0},{id:'sth',label:'θ',color:'#a855f7',sys:'spherical',idx:1},{id:'sphi',label:'φ(구면)',color:'#14b8a6',sys:'spherical',idx:2}];
+function buildCC(){[['chkCart',['cx','cy','cz']],['chkCyl',['rho','cphi','cylz']],['chkSph',['sr','sth','sphi']]].forEach(([el,ids])=>{document.getElementById(el).innerHTML=ids.map(id=>{const d=CDEFS.find(x=>x.id===id);return`<div class="chk-item ${checkedComps[id]?'checked':''}" data-comp="${id}" style="--c:${d.color}"><span class="ci-dot" style="background:${d.color}"></span>${d.label}</div>`}).join('')});document.querySelectorAll('.chk-item').forEach(el=>{el.addEventListener('click',()=>{const id=el.dataset.comp;if(checkedComps[id]!==undefined){checkedComps[id]=!checkedComps[id];el.classList.toggle('checked');if(document.getElementById('f2ResBox').style.display!=='none')doF2()}})})};
+function setupPT(tid,setter){document.querySelectorAll(`#${tid} .tab`).forEach(el=>{el.addEventListener('click',()=>{document.querySelectorAll(`#${tid} .tab`).forEach(t=>t.classList.remove('on'));el.classList.add('on');setter(el.dataset.sys)})})}
+setupPT('ptASysTabs',s=>{ptASys=s;f2BI('ptA',s,[1,2,3])});
+setupPT('ptBSysTabs',s=>{ptBSys=s;f2BI('ptB',s,[4,5,6])});
+
+function doF2() {
+  clearDyn();
+  const ptAV = [0, 1, 2].map(i => parseFloat(document.getElementById('ptAv'+i).value) || 0);
+  const cartA = toCart(ptASys, ptAV);
+  const ptBV = [0, 1, 2].map(i => parseFloat(document.getElementById('ptBv'+i).value) || 0);
+  const cartB = toCart(ptBSys, ptBV);
+
+  dynGroup.add(drawPt(cartA, '#f59e0b')); 
+  dynGroup.add(drawPt(cartB, '#38bdf8')); 
+  
+  const lblA = mkLbl('A', '#f59e0b', 0.8);
+  lblA.position.copy(m2t(...cartA).add(new THREE.Vector3(0, 0.5, 0)));
+  dynGroup.add(lblA);
+  
+  const lblB = mkLbl('B', '#38bdf8', 0.8);
+  lblB.position.copy(m2t(...cartB).add(new THREE.Vector3(0, 0.5, 0)));
+  dynGroup.add(lblB);
+
+  const vecAB = [cartB[0] - cartA[0], cartB[1] - cartA[1], cartB[2] - cartA[2]];
+  const dist = Math.sqrt(vecAB[0]**2 + vecAB[1]**2 + vecAB[2]**2);
+
+  if(dist > 0.001) {
+    dynGroup.add(drawArrow(cartA, vecAB, dist, getThemeColor(), 'AB'));
+  }
+
+  const compCart = decomposeVec(vecAB, cartA, 'cartesian');
+  const compCyl = decomposeVec(vecAB, cartA, 'cylindrical');
+  const compSph = decomposeVec(vecAB, cartA, 'spherical');
+
+  const allComps = {
+    cx: compCart[0], cy: compCart[1], cz: compCart[2],
+    rho: compCyl[0], cphi: compCyl[1], cylz: compCyl[2],
+    sr: compSph[0], sth: compSph[1], sphi: compSph[2]
+  };
+
+  let resHTML = `<div class="rcard"><h4>벡터 AB (거리: ${dist.toFixed(3)})</h4>`;
+
+  CDEFS.forEach(def => {
+    if(checkedComps[def.id]) {
+      const cData = allComps[def.id];
+      if(Math.abs(cData.mag) > 0.001) {
+        const dir = cData.mag > 0 ? cData.dir : [-cData.dir[0], -cData.dir[1], -cData.dir[2]];
+        dynGroup.add(drawArrow(cartA, dir, Math.abs(cData.mag), def.color, def.label));
+      }
+      resHTML += `<div class="vr"><span class="vc" style="background:${def.color}"></span><span class="vn" style="color:${def.color}">${def.label}</span><span class="vv">${cData.mag.toFixed(3)}</span></div>`;
+    }
+  });
+  resHTML += `</div>`;
+  document.getElementById('f2Result').innerHTML = resHTML;
+  document.getElementById('f2ResBox').style.display = 'block';
+}
+document.getElementById('f2Calc').addEventListener('click', doF2);
+
+// =========================================
+// Feature 3: EM Field 
+// =========================================
+const SRC_COLORS=['#ef4444','#22c55e','#3b82f6','#f59e0b','#ec4899','#8b5cf6','#14b8a6','#f97316'];
+function buildEMParams(){
+  const t=document.getElementById('emType').value;
+  let h='';
+  if(t==='point'){
+    h+=`<div class="irow"><label>전하 q</label><input type="number" id="emQ" value="1" step="any"><span class="hint">μC</span></div>`;
+    h+=`<div class="irow"><label>위치 x</label><input type="number" id="emSx" value="0" step="any"><span class="hint"></span></div>`;
+    h+=`<div class="irow"><label>위치 y</label><input type="number" id="emSy" value="0" step="any"><span class="hint"></span></div>`;
+    h+=`<div class="irow"><label>위치 z</label><input type="number" id="emSz" value="0" step="any"><span class="hint"></span></div>`;
+  } else if(t==='line'){
+    h+=`<div class="irow"><label>선전하 λ</label><input type="number" id="emLambda" value="1" step="any"><span class="hint">μC/m</span></div>`;
+    h+=`<div class="irow"><label>위치 x₀</label><input type="number" id="emLx" value="0" step="any"><span class="hint"></span></div>`;
+    h+=`<div class="irow"><label>위치 y₀</label><input type="number" id="emLy" value="0" step="any"><span class="hint"></span></div>`;
+    h+=`<div class="trow" style="margin-top:8px"><label style="font-size:13px;font-weight:500;">무한 길이</label><label class="sw"><input type="checkbox" id="emIsInf" checked><span class="sl"></span></label></div>`;
+    h+=`<div id="emFiniteParams" style="display:none; padding:8px 0 0 10px; border-left:2px solid #3b82f6; margin-top:4px">`;
+    h+=`<div class="irow"><label style="width:60px">Z 시작</label><input type="number" id="emLz1" value="-5" step="any"><span class="hint"></span></div>`;
+    h+=`<div class="irow"><label style="width:60px">Z 끝</label><input type="number" id="emLz2" value="5" step="any"><span class="hint"></span></div>`;
+    h+=`</div>`;
+    h+=`<div style="font-size:11px;color:#475569;margin-top:4px" id="emLineDesc">※ z축 방향으로 무한히 뻗은 직선전하</div>`;
+  } else {
+    h+=`<div class="irow"><label>면전하 σ</label><input type="number" id="emSigma" value="1" step="any"><span class="hint">μC/m²</span></div>`;
+    h+=`<div class="irow"><label>평면</label><select id="emSurfPlane"><option value="z">z = 상수 (XY평면)</option><option value="x">x = 상수 (YZ평면)</option><option value="y">y = 상수 (XZ평면)</option></select></div>`;
+    h+=`<div class="irow"><label>위치</label><input type="number" id="emSurfPos" value="0" step="any"><span class="hint"></span></div>`;
+  }
+  document.getElementById('emParams').innerHTML=h;
+
+  if(t==='line'){
+    const chk = document.getElementById('emIsInf');
+    const pnl = document.getElementById('emFiniteParams');
+    const desc = document.getElementById('emLineDesc');
+    chk.addEventListener('change', ()=>{
+      if(chk.checked){
+        pnl.style.display = 'none';
+        desc.innerHTML = '※ z축 방향으로 무한히 뻗은 직선전하';
+      } else {
+        pnl.style.display = 'block';
+        desc.innerHTML = '※ 지정된 Z 구간에만 존재하는 유한 선전하';
+      }
+    });
+  }
+}
+document.getElementById('emType').addEventListener('change',buildEMParams);
+
+document.getElementById('emAdd').addEventListener('click',()=>{
+  const t=document.getElementById('emType').value;
+  let src;
+  if(t==='point') src={type:'point',q:parseFloat(document.getElementById('emQ').value)||1,pos:[parseFloat(document.getElementById('emSx').value)||0,parseFloat(document.getElementById('emSy').value)||0,parseFloat(document.getElementById('emSz').value)||0]};
+  else if(t==='line') {
+    const isInf = document.getElementById('emIsInf').checked;
+    let z1 = isInf ? null : parseFloat(document.getElementById('emLz1').value)||0;
+    let z2 = isInf ? null : parseFloat(document.getElementById('emLz2').value)||0;
+    if(!isInf && z1 > z2) { const temp = z1; z1 = z2; z2 = temp; }
+    src={
+      type:'line',
+      lambda:parseFloat(document.getElementById('emLambda').value)||1,
+      x0:parseFloat(document.getElementById('emLx').value)||0,
+      y0:parseFloat(document.getElementById('emLy').value)||0,
+      isInfinite: isInf,
+      z1: z1,
+      z2: z2
+    };
+  }
+  else src={type:'surface',sigma:parseFloat(document.getElementById('emSigma').value)||1,plane:document.getElementById('emSurfPlane').value,pos:parseFloat(document.getElementById('emSurfPos').value)||0};
+  emSources.push(src);renderSrcList();
+});
+document.getElementById('emClearAll').addEventListener('click',()=>{emSources=[];renderSrcList();clearDyn()});
+
+function renderSrcList(){
+  const el=document.getElementById('emSrcList');
+  if(!emSources.length){el.innerHTML='<div class="empty">소스를 추가하세요</div>';return}
+  el.innerHTML=emSources.map((s,i)=>{
+    const c=SRC_COLORS[i%SRC_COLORS.length];
+    let desc;
+    if(s.type==='point') desc=`q=${s.q}μC @ (${s.pos.map(v=>v.toFixed(1)).join(', ')})`;
+    else if(s.type==='line') {
+      if(s.isInfinite !== false) desc=`λ=${s.lambda}μC/m @ x₀=${s.x0}, y₀=${s.y0} (무한)`;
+      else desc=`λ=${s.lambda}μC/m @ x₀=${s.x0}, y₀=${s.y0} (z: ${s.z1} ~ ${s.z2})`;
+    }
+    else desc=`σ=${s.sigma}μC/m² @ ${s.plane}=${s.pos}`;
+    const tname={point:'점전하',line: s.isInfinite === false ? '유한 선전하' : '무한 선전하',surface:'면전하'}[s.type];
+    return `<div class="src-item"><div class="si-info"><div class="si-type" style="color:${c}">● ${tname}</div><div class="si-detail">${desc}</div></div><span class="si-del" data-si="${i}">✕</span></div>`;
+  }).join('');
+  el.querySelectorAll('.si-del').forEach(btn=>{btn.addEventListener('click',()=>{emSources.splice(parseInt(btn.dataset.si),1);renderSrcList()})});
+}
+
+function f3PtBI(sys, defs){
+  const s=SYS[sys];
+  document.getElementById('emPtInputs').innerHTML=s.lbl.map((l,i)=>
+    `<div class="irow"><label>${l}</label><input id="emPtV${i}" type="number" step="any" value="${defs[i]}"><span class="hint">${s.unit[i]}</span></div>`
+  ).join('');
+}
+setupPT('emPtSysTabs', s=>{
+  emPtSys=s;
+  f3PtBI(s, s==='cartesian'?[2,0,0]:(s==='cylindrical'?[2,0,0]:[2,90,0]));
+});
+f3PtBI('cartesian', [2,0,0]);
+
+// =========================================
+// 전자기장 수식 보정 로직
+// =========================================
+function computeE(px,py,pz){
+  let Ex=0,Ey=0,Ez=0;        
+  let Erx=0,Ery=0,Erz=0;    
+  const K_u = 8987.5517923; 
+
+  emSources.forEach(s=>{
+    if(s.type==='point'){
+      const dx=px-s.pos[0],dy=py-s.pos[1],dz=pz-s.pos[2],r2=dx*dx+dy*dy+dz*dz;
+      if(r2<0.01)return;
+      const r=Math.sqrt(r2),r3=r2*r,k=s.q/r3;
+      const vx=k*dx, vy=k*dy, vz=k*dz;
+      Ex+=vx; Ey+=vy; Ez+=vz;
+      Erx+=vx*K_u; Ery+=vy*K_u; Erz+=vz*K_u;
+      
+    } else if(s.type==='line'){
+      const dx=px-s.x0,dy=py-s.y0,rho2=dx*dx+dy*dy;
+      if(rho2<0.01)return;
+      let vx=0, vy=0, vz=0;
+      if(s.isInfinite !== false) {
+        const k=s.lambda/rho2; 
+        vx=k*dx; vy=k*dy;
+      } else {
+        const u1 = s.z1 - pz;
+        const u2 = s.z2 - pz;
+        const sq1 = Math.sqrt(rho2 + u1*u1);
+        const sq2 = Math.sqrt(rho2 + u2*u2);
+        const scale = 0.5;
+        const T = (1 / rho2) * ((u2 / sq2) - (u1 / sq1));
+        const dEz = s.lambda * ((1 / sq2) - (1 / sq1));
+        vx = scale * s.lambda * dx * T;
+        vy = scale * s.lambda * dy * T;
+        vz = scale * dEz;
+      }
+      Ex+=vx; Ey+=vy; Ez+=vz;
+      const f = 2 * K_u;
+      Erx+=vx*f; Ery+=vy*f; Erz+=vz*f;
+      
+    } else {
+      let dist,nx=0,ny=0,nz=0;
+      if(s.plane==='z'){dist=pz-s.pos;nz=dist>0?1:-1;}
+      else if(s.plane==='x'){dist=px-s.pos;nx=dist>0?1:-1;}
+      else{dist=py-s.pos;ny=dist>0?1:-1;}
+      if(Math.abs(dist)<0.001)return;
+      const mag=s.sigma*0.5;
+      const vx=mag*nx, vy=mag*ny, vz=mag*nz;
+      Ex+=vx; Ey+=vy; Ez+=vz;
+      const f = 4 * Math.PI * K_u;
+      Erx+=vx*f; Ery+=vy*f; Erz+=vz*f;
+    }
+  });
+  return {
+    vis: [Ex,Ey,Ez],
+    real: [Erx,Ery,Erz]
+  };
+}
+
+document.querySelectorAll('#emF3Comps .chk-item').forEach(el => {
+  el.addEventListener('click', () => {
+    const id = el.dataset.comp;
+    if(emCheckedComps[id] !== undefined){
+      emCheckedComps[id] = !emCheckedComps[id];
+      el.classList.toggle('checked');
+      if(document.getElementById('emResBox').style.display !== 'none') {
+        document.getElementById('emCalcPt').click();
+      }
+    }
+  });
+});
+
+document.getElementById('emCalcPt').addEventListener('click',()=>{
+  if(!emSources.length)return;
+  clearDyn();
+
+  const ptV=[0,1,2].map(i=>parseFloat(document.getElementById('emPtV'+i).value)||0);
+  const cartPt=toCart(emPtSys,ptV);
+  const [px,py,pz]=cartPt;
+  
+  emSources.forEach((s,si)=>{
+    if(s.type==='point'){
+      const col=s.q>0?0xff4444:0x4488ff;
+      const mesh=new THREE.Mesh(new THREE.SphereGeometry(0.25,20,20),new THREE.MeshStandardMaterial({color:col,emissive:col,emissiveIntensity:0.4}));
+      mesh.position.copy(m2t(...s.pos));dynGroup.add(mesh);
+      const lb=mkLbl(s.q>0?'+q':'-q',s.q>0?'#ff6666':'#66aaff',1.2);
+      lb.position.copy(m2t(s.pos[0],s.pos[1],s.pos[2]+0.5));dynGroup.add(lb);
+    } else if(s.type==='line'){
+      let len = 2000; 
+      let cz = 0;
+      if(s.isInfinite === false) {
+        len = Math.abs(s.z2 - s.z1);
+        if(len < 0.1) len = 0.1; 
+        cz = (s.z1 + s.z2) / 2;
+      }
+      const geo=new THREE.CylinderGeometry(0.08,0.08,len,16);
+      const mat=new THREE.MeshStandardMaterial({color:0xf59e0b,emissive:0xf59e0b,emissiveIntensity:0.3});
+      const mesh=new THREE.Mesh(geo,mat);
+      mesh.position.copy(m2t(s.x0,s.y0,cz));
+      dynGroup.add(mesh);
+      
+      let lbZ = s.isInfinite === false ? s.z2 + 0.5 : 10.5;
+      const lb=mkLbl('λ','#f59e0b',1);lb.position.copy(m2t(s.x0,s.y0,lbZ));dynGroup.add(lb);
+    } else {
+      const sz = 2000;
+      let geo = new THREE.PlaneGeometry(sz, sz, 40, 40);
+      const mat = new THREE.MeshBasicMaterial({color:0x8b5cf6, transparent:true, opacity:0.25, side:THREE.DoubleSide, depthWrite:false});
+      const mesh = new THREE.Mesh(geo, mat);
+      
+      const wireMat = new THREE.LineBasicMaterial({color: 0x8b5cf6, transparent:true, opacity:0.3});
+      const wire = new THREE.LineSegments(new THREE.WireframeGeometry(geo), wireMat);
+      mesh.add(wire);
+      
+      const lb = mkLbl('σ','#8b5cf6',1);
+      
+      if(s.plane==='z'){
+        mesh.position.copy(m2t(0,0,s.pos));
+        mesh.rotation.x=-PI/2;
+        lb.position.copy(m2t(0,0,s.pos+0.5));
+      }
+      else if(s.plane==='x'){
+        mesh.position.copy(m2t(s.pos,0,0));
+        lb.position.copy(m2t(s.pos+0.5,0,0));
+      }
+      else{
+        mesh.position.copy(m2t(0,s.pos,0));
+        mesh.rotation.y=PI/2;
+        lb.position.copy(m2t(0,s.pos+0.5,0));
+      }
+      
+      dynGroup.add(mesh);
+      dynGroup.add(lb);
+    }
+  });
+
+  const E_data = computeE(px,py,pz);
+  const E = E_data.vis;      
+  const E_r = E_data.real;   
+  
+  const Em = Math.sqrt(E_r[0]**2+E_r[1]**2+E_r[2]**2);
+  const D = E_r.map(e=>e*EPS0); 
+  const Dm = Math.sqrt(D[0]**2+D[1]**2+D[2]**2);
+  
+  const cylCoord=fromCart('cylindrical',[px,py,pz]),sphCoord=fromCart('spherical',[px,py,pz]);
+  const cylUV=unitVecs('cylindrical',cylCoord),sphUV=unitVecs('spherical',sphCoord);
+  
+  const Ecyl_r=cylUV.map(u=>E_r[0]*u.d[0]+E_r[1]*u.d[1]+E_r[2]*u.d[2]);
+  const Esph_r=sphUV.map(u=>E_r[0]*u.d[0]+E_r[1]*u.d[1]+E_r[2]*u.d[2]);
+  const Ecyl_v=cylUV.map(u=>E[0]*u.d[0]+E[1]*u.d[1]+E[2]*u.d[2]);
+  const Esph_v=sphUV.map(u=>E[0]*u.d[0]+E[1]*u.d[1]+E[2]*u.d[2]);
+
+  let rh=`<div class="rcard"><h4>점 (${px.toFixed(2)}, ${py.toFixed(2)}, ${pz.toFixed(2)}) 에서의 필드</h4>`;
+  rh+=`<div class="coord" style="color:#f59e0b">E (전기장) — 직교좌표 [V/m]</div>`;
+  rh+=`<div class="vr"><span class="vc" style="background:#22c55e"></span><span class="vn" style="color:#22c55e">Ex</span><span class="vv">${E_r[0].toExponential(4)}</span></div>`;
+  rh+=`<div class="vr"><span class="vc" style="background:#ef4444"></span><span class="vn" style="color:#ef4444">Ey</span><span class="vv">${E_r[1].toExponential(4)}</span></div>`;
+  rh+=`<div class="vr"><span class="vc" style="background:#3b82f6"></span><span class="vn" style="color:#3b82f6">Ez</span><span class="vv">${E_r[2].toExponential(4)}</span></div>`;
+  rh+=`<div class="coord" style="margin-top:6px">|E| = ${Em.toExponential(4)} V/m</div>`;
+  rh+=`<div class="coord" style="color:#a78bfa;margin-top:8px">E — 원통좌표 [V/m]</div>`;
+  rh+=`<div class="vr"><span class="vc" style="background:#f97316"></span><span class="vn" style="color:#f97316">Eρ</span><span class="vv">${Ecyl_r[0].toExponential(4)}</span></div>`;
+  rh+=`<div class="vr"><span class="vc" style="background:#eab308"></span><span class="vn" style="color:#eab308">Eφ</span><span class="vv">${Ecyl_r[1].toExponential(4)}</span></div>`;
+  rh+=`<div class="vr"><span class="vc" style="background:#06b6d4"></span><span class="vn" style="color:#06b6d4">Ez</span><span class="vv">${Ecyl_r[2].toExponential(4)}</span></div>`;
+  rh+=`<div class="coord" style="color:#ec4899;margin-top:8px">E — 구면좌표 [V/m]</div>`;
+  rh+=`<div class="vr"><span class="vc" style="background:#ec4899"></span><span class="vn" style="color:#ec4899">Er</span><span class="vv">${Esph_r[0].toExponential(4)}</span></div>`;
+  rh+=`<div class="vr"><span class="vc" style="background:#a855f7"></span><span class="vn" style="color:#a855f7">Eθ</span><span class="vv">${Esph_r[1].toExponential(4)}</span></div>`;
+  rh+=`<div class="vr"><span class="vc" style="background:#14b8a6"></span><span class="vn" style="color:#14b8a6">Eφ</span><span class="vv">${Esph_r[2].toExponential(4)}</span></div>`;
+  rh+=`<div class="coord" style="color:#60a5fa;margin-top:10px">D = ε₀E (전속밀도) [C/m²]</div>`;
+  rh+=`<div class="coord">|D| = ${Dm.toExponential(4)}</div></div>`;
+
+  document.getElementById('emResult').innerHTML=rh;
+  document.getElementById('emResBox').style.display='block';
+
+  emPtGroup = new THREE.Group();
+  dynGroup.add(emPtGroup);
+  emPtGroup.add(drawPt([px,py,pz], getThemeColor()));
+
+  const addSpecificArrow = (mag, dir, color, labelText) => {
+    if(Math.abs(mag) < 1e-10) return;
+    const actualDir = mag > 0 ? dir : [-dir[0], -dir[1], -dir[2]];
+    const absMag = Math.abs(mag);
+    const arrowLen = Math.min(3.5, Math.log(absMag+1)*0.6+0.8);
+    
+    const g = drawArrow([px,py,pz], actualDir, arrowLen, color, labelText);
+    
+    emPtGroup.add(g);
+  };
+
+  const Em_v = Math.sqrt(E[0]**2+E[1]**2+E[2]**2);
+
+  if(emCheckedComps.E_total && Em_v > 1e-10) addSpecificArrow(Em_v, [E[0]/Em_v, E[1]/Em_v, E[2]/Em_v], '#ffff00', 'E');
+  
+  if(emCheckedComps.Ex) addSpecificArrow(E[0], [1,0,0], '#22c55e', 'Ex');
+  if(emCheckedComps.Ey) addSpecificArrow(E[1], [0,1,0], '#ef4444', 'Ey');
+  if(emCheckedComps.Ez) addSpecificArrow(E[2], [0,0,1], '#3b82f6', 'Ez');
+  
+  if(emCheckedComps.Erho) addSpecificArrow(Ecyl_v[0], cylUV[0].d, '#f97316', 'Eρ');
+  if(emCheckedComps.Ephi_cyl) addSpecificArrow(Ecyl_v[1], cylUV[1].d, '#eab308', 'Eφ');
+  
+  if(emCheckedComps.Er) addSpecificArrow(Esph_v[0], sphUV[0].d, '#ec4899', 'Er');
+  if(emCheckedComps.Eth) addSpecificArrow(Esph_v[1], sphUV[1].d, '#a855f7', 'Eθ');
+  if(emCheckedComps.Ephi_sph) addSpecificArrow(Esph_v[2], sphUV[2].d, '#14b8a6', 'Eφ');
+});
+
+// =========================================
+// Navigation 및 옵션 동기화
+// =========================================
+function showP(id){document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));document.getElementById(id).classList.add('active')}
+
+['backF1','backF2','backF3'].forEach(id => {
+  document.getElementById(id).addEventListener('click', () => {
+    showP('panelSelect');
+    clearDyn();
+    document.getElementById('infoBox').innerHTML='<b>기능을 선택해주세요</b><br>왼쪽 패널에서 원하는 기능을 클릭하세요';
+  });
+});
+
+document.getElementById('feat1').addEventListener('click',()=>{
+  currentFeature=1;showP('panelF1');clearDyn();
+  document.getElementById('infoBox').innerHTML='<b>좌표계 변환</b><br>좌표를 입력하세요';
+  gridObj.visible = document.querySelector('.tGrid').checked;
+  axesObj.visible = document.querySelector('.tAxes').checked;
+});
+document.getElementById('feat2').addEventListener('click',()=>{
+  currentFeature=2;showP('panelF2');clearDyn();
+  document.getElementById('infoBox').innerHTML='<b>두 점 관계</b><br>두 점을 입력하세요';
+  gridObj.visible = document.querySelector('.tGrid') ? document.querySelector('.tGrid').checked : true;
+  axesObj.visible = document.querySelector('.tAxes') ? document.querySelector('.tAxes').checked : true;
+});
+document.getElementById('feat3').addEventListener('click',()=>{
+  currentFeature=3;showP('panelF3');clearDyn();
+  document.getElementById('infoBox').innerHTML='<b>전기장 시각화</b><br>전하 소스를 추가하고 특정 점에서 계산하세요';
+  gridObj.visible = document.querySelector('.tGrid') ? document.querySelector('.tGrid').checked : true; 
+  axesObj.visible = document.querySelector('.tAxes') ? document.querySelector('.tAxes').checked : true; 
+});
+
+// 체크박스 글로벌 동기화 이벤트
+document.querySelectorAll('.tGrid').forEach(el => {
+  el.addEventListener('change', (e) => {
+    const checked = e.target.checked;
+    document.querySelectorAll('.tGrid').forEach(cb => cb.checked = checked);
+    if(gridObj) gridObj.visible = checked;
+  });
+});
+document.querySelectorAll('.tAxes').forEach(el => {
+  el.addEventListener('change', (e) => {
+    const checked = e.target.checked;
+    document.querySelectorAll('.tAxes').forEach(cb => cb.checked = checked);
+    if(axesObj) axesObj.visible = checked;
+  });
+});
+
+function setZ(d){const dir=camera.position.clone().sub(controls.target).normalize();camera.position.copy(controls.target.clone().add(dir.multiplyScalar(d)))}
+document.getElementById('zoomIn').addEventListener('click',()=>{const d=Math.max(2,camera.position.distanceTo(controls.target)-2);setZ(d);document.getElementById('zoomSlider').value=d});
+document.getElementById('zoomOut').addEventListener('click',()=>{const d=Math.min(100,camera.position.distanceTo(controls.target)+2);setZ(d);document.getElementById('zoomSlider').value=d});
+document.getElementById('zoomSlider').addEventListener('input',e=>{setZ(parseFloat(e.target.value))});
+document.getElementById('zoomReset').addEventListener('click',()=>{camera.position.set(9,7,7);controls.target.set(0,0,0);document.getElementById('zoomSlider').value=13});
+
+init();f1BI();f1BDT();renderHist();
+f2BI('ptA','cartesian',[1,2,3]);f2BI('ptB','cartesian',[4,5,6]);buildCC();
+buildEMParams();
+</script>
+</body>
+</html>
